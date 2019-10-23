@@ -1,0 +1,98 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  LambdaBucketName:
+    Type: String
+
+  LambdaName:
+    Description: Filname witheout extension
+    Type: String
+    Default: ds-slack
+
+  LambdaTimeout:
+    Type: Number
+    Default: 5
+
+  LambdaS3KeyPath:
+    Type: String
+
+  SlackChannelName:
+    Type: String
+    Default: general
+
+  SlackApiToken:
+    Type: String
+    NoEcho: true
+
+Resources:
+  SlackLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref LambdaName
+      Description: Send Deep Security notifications to Slack
+      Handler: !Sub '${LambdaName}.lambda_handler'
+      Code:
+        S3Bucket: !Ref LambdaBucketName
+        S3Key: !Sub '${LambdaS3KeyPath}/${LambdaName}.zip'
+      Environment:
+        Variables:
+          SLACK_CHANNEL_NAME: !Ref SlackChannelName
+          SLACK_API_TOKEN: !Ref SlackApiToken
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 5
+      Runtime: python3.7
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:*
+            Resource: arn:aws:logs:*:*:*
+
+  DsSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: Deep-Security-Notifications
+
+  SnsLambdaSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        TopicArn: !Ref DsSnsTopic
+        Protocol: lambda
+        Endpoint: !GetAtt SlackLambda.Arn
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref DsSnsTopic
+      FunctionName: !GetAtt SlackLambda.Arn
+
+Outputs:
+  DeepSecuritySnsArn:
+    Value: !Ref DsSnsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-sns-arn'
+
+  SlackLambdaS3Location:
+    Value: !Sub '${LambdaBucketName}/${LambdaS3KeyPath}/${LambdaName}.zip'
+    Export:
+      Name: !Sub '${AWS::StackName}-lambda-location'
