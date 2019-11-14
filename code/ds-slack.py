@@ -11,10 +11,10 @@ class SlackClient:
         self.sc = slack.WebClient(token=SLACK_API_TOKEN)
         self.channel_id = self._get_channel_id(SLACK_CHANNEL_NAME)
 
-    def _get_channel_id(self, pipeline_channel):
+    def _get_channel_id(self, channel_name):
         get_channels = self.sc.api_call('channels.list')
         for channel in get_channels['channels']:
-            if channel['name'] == pipeline_channel:
+            if channel['name'] == channel_name:
                 channel_id = channel['id']
 
                 return channel_id
